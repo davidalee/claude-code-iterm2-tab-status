@@ -14,7 +14,6 @@ iTerm2 supports user-defined variables in session context. A profile subtitle ca
 
 - Preserve the current title-prefix behavior as the default.
 - Let users choose title, subtitle, or both as the display target.
-- Let users customize the user variable name used for subtitle display.
 - Clear the subtitle variable when the Claude session is cleared.
 - Document iTerm2 profile setup for subtitle users.
 - Cover config parsing and status value behavior with tests.
@@ -28,12 +27,11 @@ iTerm2 supports user-defined variables in session context. A profile subtitle ca
 
 ## Configuration
 
-Add two config keys:
+Add one config key:
 
 ```json
 {
-  "display_target": "title",
-  "subtitle_variable": "claudeStatus"
+  "display_target": "title"
 }
 ```
 
@@ -45,12 +43,11 @@ Add two config keys:
 
 Invalid `display_target` values fall back to `title`.
 
-`subtitle_variable` is the unqualified variable name users reference from iTerm2 as `\(user.<name>)`. Invalid empty values fall back to `claudeStatus`. The adapter will pass the fully qualified name `user.<name>` to the iTerm2 Python API.
+Subtitle mode always uses the fixed session-scoped iTerm2 user variable `user.claudeStatus`. Users reference it from iTerm2 as `\(user.claudeStatus)`. A fixed variable keeps the config surface small and avoids another setting for a rare name-collision case.
 
 Environment variables:
 
 - `CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET`
-- `CLAUDE_ITERM2_TAB_STATUS_SUBTITLE_VARIABLE`
 
 ## Runtime Behavior
 
@@ -62,7 +59,7 @@ When a signal enters a state, the adapter builds the status text from the config
 
 Title display continues to use the existing prefix plus the current title/session name.
 
-Subtitle display calls `session.async_set_variable("user.<subtitle_variable>", status_text)` on the matched iTerm2 session. If this fails, the adapter logs at debug level and continues, matching the current best-effort behavior for title updates.
+Subtitle display calls `session.async_set_variable("user.claudeStatus", status_text)` on the matched iTerm2 session. If this fails, the adapter logs at debug level and continues, matching the current best-effort behavior for title updates.
 
 When a Claude session is cleared, the adapter sets the same user variable to an empty string. This removes stale subtitle content while preserving the user's profile subtitle expression.
 
@@ -70,13 +67,13 @@ When a Claude session is cleared, the adapter sets the same user variable to an 
 
 - `scripts/claude_tab_status.py`
   - Add config defaults and environment mapping.
-  - Add helper functions for display target validation and user variable naming.
+  - Add helper functions for display target validation and subtitle status text.
   - Update state entry and clear logic to route status to title, subtitle, or both.
 
 - `tests/test_adapter.py`
   - Add unit tests for default config values.
   - Add unit tests for file and environment overrides.
-  - Add unit tests for invalid display target fallback and subtitle variable fallback.
+  - Add unit tests for invalid display target fallback.
   - Add async tests for setting and clearing subtitle variables.
 
 - `README.md`
@@ -85,7 +82,7 @@ When a Claude session is cleared, the adapter sets the same user variable to an 
   - Note that users who want Claude Code to stop changing main titles can set `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` in their shell startup file.
 
 - `commands/config.md`
-  - Include the two new settings in the interactive config command instructions.
+  - Include the new display target setting in the interactive config command instructions.
 
 ## Testing
 
@@ -112,6 +109,6 @@ Because iTerm2's Python runtime is mocked in unit tests, manual verification in 
 
 The main compatibility risk is accidentally changing default title behavior. The default remains `title`, and tests should assert that missing config produces the existing behavior.
 
-The iTerm2 user-variable API requires fully qualified names beginning with `user.`. The config stores only the short name to keep user-facing setup simple, and the adapter constructs the qualified name internally.
+The iTerm2 user-variable API requires fully qualified names beginning with `user.`. The adapter uses the fixed fully qualified name `user.claudeStatus`.
 
 Claude Code can still set terminal titles independently. This feature does not suppress that; documentation will tell users how to opt out with `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` if they want main titles fully controlled by iTerm2.
