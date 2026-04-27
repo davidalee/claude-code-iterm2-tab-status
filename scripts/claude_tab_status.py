@@ -26,6 +26,7 @@ Environment variables (all optional):
   CLAUDE_ITERM2_TAB_STATUS_PREFIX_RUNNING   Running prefix (default: "⚡ ")
   CLAUDE_ITERM2_TAB_STATUS_PREFIX_IDLE      Idle prefix (default: "💤 ")
   CLAUDE_ITERM2_TAB_STATUS_PREFIX_ATTENTION Attention prefix (default: "🔴 ")
+  CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET   Display target title/subtitle/both (default: title)
   CLAUDE_ITERM2_TAB_STATUS_BADGE            Badge text (default: "⚠️ Needs input")
   CLAUDE_ITERM2_TAB_STATUS_BADGE_ENABLED    Enable/disable badge true/false (default: true)
   CLAUDE_ITERM2_TAB_STATUS_NOTIFY           macOS notification true/false (default: false)
@@ -44,7 +45,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Awaitable, Callable, Optional
 
 # --- Configuration ---
 
@@ -63,6 +64,7 @@ _DEFAULTS: dict[str, object] = {
     "badge": "⚠️ Needs input",
     "notify": False,
     "sound": "",
+    "display_target": "title",
 }
 
 _ENV_MAP: dict[str, tuple[str, type]] = {
@@ -78,7 +80,19 @@ _ENV_MAP: dict[str, tuple[str, type]] = {
     "badge": ("BADGE", str),
     "notify": ("NOTIFY", lambda v: v.lower() == "true"),
     "sound": ("SOUND", str),
+    "display_target": ("DISPLAY_TARGET", str),
 }
+
+_DISPLAY_TARGETS = {"title", "subtitle", "both"}
+
+
+def _normalize_display_target(value: object) -> str:
+    """Return a supported display target, defaulting to title."""
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _DISPLAY_TARGETS:
+            return normalized
+    return "title"
 
 
 def load_config(config_path: str | None = None) -> dict[str, object]:
@@ -103,6 +117,8 @@ def load_config(config_path: str | None = None) -> dict[str, object]:
                 cfg[key] = converter(env_val)
             except (ValueError, TypeError):
                 pass
+
+    cfg["display_target"] = _normalize_display_target(cfg.get("display_target"))
 
     return cfg
 
@@ -387,6 +403,54 @@ def set_state_prefix(name: str, prefix: str) -> str:
     return prefix + strip_all_prefixes(name)
 
 
+_SUBTITLE_VARIABLE = "user.claudeStatus"
+
+
+def _should_update_title(display_target: object | None = None) -> bool:
+    """Return whether the current target should update the tab title."""
+    target = _normalize_display_target(display_target or CONFIG.get("display_target"))
+    return target in {"title", "both"}
+
+
+def _should_update_subtitle(display_target: object | None = None) -> bool:
+    """Return whether the current target should update the subtitle variable."""
+    target = _normalize_display_target(display_target or CONFIG.get("display_target"))
+    return target in {"subtitle", "both"}
+
+
+def _subtitle_status_text(prefix: str) -> str:
+    """Convert a title prefix into compact subtitle text."""
+    return prefix.strip()
+
+
+async def _set_subtitle_status(session: object, status_text: str) -> None:
+    """Set the fixed iTerm2 user variable used by profile subtitles."""
+    try:
+        await session.async_set_variable(_SUBTITLE_VARIABLE, status_text)  # type: ignore[union-attr]
+    except Exception:
+        log.debug("session.async_set_variable failed for subtitle status")
+
+
+async def _clear_subtitle_status(session: object) -> None:
+    """Clear the fixed iTerm2 user variable used by profile subtitles."""
+    await _set_subtitle_status(session, "")
+
+
+async def _apply_status_display(
+    info: dict, prefix: str, set_title: Callable[[dict, str], Awaitable[None]]
+) -> None:
+    """Apply status to the configured display target."""
+    if _should_update_title():
+        await set_title(info, prefix)
+    if _should_update_subtitle():
+        await _set_subtitle_status(info["session"], _subtitle_status_text(prefix))
+
+
+async def _clear_status_display(info: dict) -> None:
+    """Clear status display state that may outlive a signal file."""
+    await _clear_subtitle_status(info["session"])
+
+
 def add_title_prefix(name: str, prefix: str) -> str:
     """Add prefix to name if not already present."""
     if name.startswith(prefix):
@@ -528,8 +592,7 @@ async def main(connection: object) -> None:
         info["state"] = state
         prefix = _STATE_PREFIXES[state]
 
-        # ALL states: set title prefix
-        await _set_tab_title(info, prefix)
+        await _apply_status_display(info, prefix, _set_tab_title)
 
         # ATTENTION only: badge, flash, notification
         if state == TabState.ATTENTION:
@@ -622,6 +685,7 @@ async def main(connection: object) -> None:
             return
         await _leave_state(claude_sid)
         info = active.pop(claude_sid)
+        await _clear_status_display(info)
         # Restore original tab title
         tab = info.get("tab")
         if tab:

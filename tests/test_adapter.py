@@ -5,6 +5,7 @@ Runs outside iTerm2 by mocking the iterm2 module.
 
 from __future__ import annotations
 
+import inspect
 import json
 import sys
 import time
@@ -315,6 +316,102 @@ class TestSetStatePrefix:
         assert result == "💤 My Session"
 
 
+# --- TestDisplayTargetHelpers ---
+
+
+class TestDisplayTargetHelpers:
+    def test_should_update_title_for_title_target(self):
+        assert claude_tab_status._should_update_title("title") is True
+        assert claude_tab_status._should_update_subtitle("title") is False
+
+    def test_should_update_subtitle_for_subtitle_target(self):
+        assert claude_tab_status._should_update_title("subtitle") is False
+        assert claude_tab_status._should_update_subtitle("subtitle") is True
+
+    def test_should_update_both_for_both_target(self):
+        assert claude_tab_status._should_update_title("both") is True
+        assert claude_tab_status._should_update_subtitle("both") is True
+
+    def test_invalid_routing_target_behaves_like_title(self):
+        assert claude_tab_status._should_update_title("bad-value") is True
+        assert claude_tab_status._should_update_subtitle("bad-value") is False
+
+    def test_no_argument_routing_uses_config(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setitem(claude_tab_status.CONFIG, "display_target", "subtitle")
+        assert claude_tab_status._should_update_title() is False
+        assert claude_tab_status._should_update_subtitle() is True
+
+    def test_subtitle_status_text_strips_padding(self):
+        assert claude_tab_status._subtitle_status_text("⚡ ") == "⚡"
+
+    @pytest.mark.asyncio
+    async def test_set_subtitle_status_uses_fixed_user_variable(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock()
+        await claude_tab_status._set_subtitle_status(session, "⚡")
+        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+
+    @pytest.mark.asyncio
+    async def test_clear_subtitle_status_sets_empty_string(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock()
+        await claude_tab_status._clear_subtitle_status(session)
+        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "")
+
+    @pytest.mark.asyncio
+    async def test_set_subtitle_status_is_best_effort(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock(side_effect=Exception("boom"))
+        await claude_tab_status._set_subtitle_status(session, "⚡")
+        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+
+    @pytest.mark.asyncio
+    async def test_apply_status_display_subtitle_does_not_touch_title(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setitem(claude_tab_status.CONFIG, "display_target", "subtitle")
+        info = {"session": MagicMock()}
+        info["session"].async_set_variable = AsyncMock()
+        set_title = AsyncMock()
+
+        await claude_tab_status._apply_status_display(info, "⚡ ", set_title)
+
+        set_title.assert_not_awaited()
+        info["session"].async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+
+    @pytest.mark.asyncio
+    async def test_apply_status_display_both_updates_title_and_subtitle(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.setitem(claude_tab_status.CONFIG, "display_target", "both")
+        info = {"session": MagicMock()}
+        info["session"].async_set_variable = AsyncMock()
+        set_title = AsyncMock()
+
+        await claude_tab_status._apply_status_display(info, "⚡ ", set_title)
+
+        set_title.assert_awaited_once_with(info, "⚡ ")
+        info["session"].async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+
+    @pytest.mark.asyncio
+    async def test_clear_status_display_clears_subtitle_variable(self):
+        info = {"session": MagicMock()}
+        info["session"].async_set_variable = AsyncMock()
+
+        await claude_tab_status._clear_status_display(info)
+
+        info["session"].async_set_variable.assert_awaited_once_with("user.claudeStatus", "")
+
+    def test_enter_state_delegates_to_status_display_router(self):
+        source = inspect.getsource(claude_tab_status.main)
+        enter_state = source.split("    async def _enter_state", 1)[1].split(
+            "    async def _leave_state", 1
+        )[0]
+
+        assert "await _apply_status_display(info, prefix, _set_tab_title)" in enter_state
+        assert "await _set_tab_title(info, prefix)" not in enter_state
+
+
 # --- TestTitlePrefix (backward compat) ---
 
 
@@ -413,6 +510,35 @@ class TestConfig:
         assert cfg["badge"] == "⚠️ Needs input"
         assert cfg["notify"] is False
         assert cfg["sound"] == ""
+
+    def test_default_display_target_is_title(self, tmp_path: Path):
+        cfg = claude_tab_status.load_config(str(tmp_path / "nonexistent.json"))
+        assert cfg["display_target"] == "title"
+
+    def test_file_display_target_override(self, tmp_path: Path):
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "subtitle"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "subtitle"
+
+    def test_env_display_target_override(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "subtitle"}))
+        monkeypatch.setenv("CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET", "both")
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "both"
+
+    def test_invalid_display_target_defaults_to_title(self, tmp_path: Path):
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "bad-value"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "title"
+
+    def test_display_target_is_case_insensitive(self, tmp_path: Path):
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "SUBTITLE"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "subtitle"
 
     def test_file_overrides_defaults(self, tmp_path: Path):
         """Config file values override defaults."""
