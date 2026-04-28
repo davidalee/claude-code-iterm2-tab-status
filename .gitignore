@@ -10,3 +10,7 @@ build/
 marketing/
 docs/plans/
 .worktrees/
+.gitnexus
+.claude
+AGENTS.md
+CLAUDE.md
