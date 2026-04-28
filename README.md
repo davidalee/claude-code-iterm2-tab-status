@@ -97,6 +97,7 @@ Settings are stored in `~/.config/claude-tab-status/config.json`. Example with a
   "prefix_idle": "💤 ",
   "prefix_attention": "🔴 ",
   "display_target": "title",
+  "subtitle_activity_source": "off",
   "badge": "⚠️ Needs input",
   "badge_enabled": true,
   "notify": false,
@@ -128,6 +129,12 @@ Set `"display_target": "subtitle"` to leave the main tab title alone and write s
 
 Use `"display_target": "both"` to update both the title prefix and subtitle variable.
 
+Set `"subtitle_activity_source": "prompt"` to append a compact, sanitized activity snippet
+to the subtitle, such as `⚡ Run tests`. The default is `"off"`, which keeps subtitle
+output status-only and does not persist prompt text in signal files. Prompt snippets are
+opt-in because Claude Code's `UserPromptSubmit` hook payload includes the submitted
+prompt.
+
 Claude Code can also set terminal titles. If you want iTerm2 to control the main title while this plugin updates the subtitle, add this to your shell startup file:
 
 ```bash
@@ -148,6 +155,7 @@ export CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1
 | `CLAUDE_ITERM2_TAB_STATUS_PREFIX_IDLE`      | `💤 `                     | Idle state prefix                               |
 | `CLAUDE_ITERM2_TAB_STATUS_PREFIX_ATTENTION` | `🔴 `                     | Attention state prefix                          |
 | `CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET`   | `title`                  | Where to show status: `title`, `subtitle`, or `both` |
+| `CLAUDE_ITERM2_TAB_STATUS_SUBTITLE_ACTIVITY_SOURCE` | `off`             | Subtitle activity source: `off` or `prompt`    |
 | `CLAUDE_ITERM2_TAB_STATUS_BADGE`            | `⚠️ Needs input`          | Badge text (attention only)                     |
 | `CLAUDE_ITERM2_TAB_STATUS_BADGE_ENABLED`    | `true`                   | Enable/disable badge (attention only)           |
 | `CLAUDE_ITERM2_TAB_STATUS_NOTIFY`           | `false`                  | macOS notification (attention only)             |
