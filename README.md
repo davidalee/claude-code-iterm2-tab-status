@@ -100,11 +100,22 @@ Settings are stored in `~/.config/claude-tab-status/config.json`. Example with a
   "badge_enabled": true,
   "notify": false,
   "sound": "",
+  "display_target": "title",
   "log_level": "WARNING"
 }
 ```
 
 The config file is **hot-reloaded** — changes take effect within ~1 second, no restart needed.
+
+### Subtitle display
+
+By default, status is shown as a tab title prefix. Set `"display_target": "subtitle"` to leave the main tab title alone and write status to the shared iTerm2 user variable `user.agentStatus`. In iTerm2, open **Settings > Profiles > General** and set **Subtitle** to:
+
+```text
+\(user.agentStatus)
+```
+
+Use `"display_target": "both"` to update both the title prefix and subtitle variable.
 
 ### Priority order
 
@@ -133,6 +144,7 @@ Environment variables are useful for CI or per-machine overrides without touchin
 | `CLAUDE_ITERM2_TAB_STATUS_BADGE_ENABLED`    | `true`                   | Enable/disable badge (attention only)           |
 | `CLAUDE_ITERM2_TAB_STATUS_NOTIFY`           | `false`                  | macOS notification (attention only)             |
 | `CLAUDE_ITERM2_TAB_STATUS_SOUND`            | *(empty)*                | Sound file path (attention only)                |
+| `CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET`   | `title`                  | Where to show status: `title`, `subtitle`, or `both` |
 | `CLAUDE_ITERM2_TAB_STATUS_LOG`              | `WARNING`                | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 
 </details>

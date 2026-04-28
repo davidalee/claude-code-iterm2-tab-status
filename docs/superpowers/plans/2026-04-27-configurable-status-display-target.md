@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a `display_target` config option that can route Claude status to the tab title, the fixed `user.claudeStatus` subtitle variable, or both.
+**Goal:** Add a `display_target` config option that can route Claude status to the tab title, the fixed `user.agentStatus` subtitle variable, or both.
 
 **Architecture:** Keep the existing hook JSON and iTerm2 adapter flow. Add small top-level helpers for display-target normalization, routing checks, subtitle text formatting, and best-effort user-variable writes, then call those helpers from the current `_enter_state` and `clear_session` paths.
 
@@ -32,11 +32,11 @@ The GitNexus MCP server is unavailable in this session, and the installed CLI do
 - Modify `tests/test_adapter.py`
   - Extend `TestConfig` with display-target parsing tests.
   - Add helper tests for target routing and subtitle text.
-  - Add async tests for setting and clearing `user.claudeStatus`.
+  - Add async tests for setting and clearing `user.agentStatus`.
 
 - Modify `README.md`
   - Document `display_target`.
-  - Add iTerm2 Subtitle setup using `\(user.claudeStatus)`.
+  - Add iTerm2 Subtitle setup using `\(user.agentStatus)`.
   - Mention `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` as an optional shell setting.
 
 - Modify `commands/config.md`
@@ -212,21 +212,21 @@ class TestDisplayTargetHelpers:
         session = MagicMock()
         session.async_set_variable = AsyncMock()
         await claude_tab_status._set_subtitle_status(session, "⚡")
-        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "⚡")
 
     @pytest.mark.asyncio
     async def test_clear_subtitle_status_sets_empty_string(self):
         session = MagicMock()
         session.async_set_variable = AsyncMock()
         await claude_tab_status._clear_subtitle_status(session)
-        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "")
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "")
 
     @pytest.mark.asyncio
     async def test_set_subtitle_status_is_best_effort(self):
         session = MagicMock()
         session.async_set_variable = AsyncMock(side_effect=Exception("boom"))
         await claude_tab_status._set_subtitle_status(session, "⚡")
-        session.async_set_variable.assert_awaited_once_with("user.claudeStatus", "⚡")
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "⚡")
 ```
 
 - [ ] **Step 2: Run tests to verify failure**
@@ -244,7 +244,7 @@ Expected: FAIL with missing helper attributes on `claude_tab_status`.
 In `scripts/claude_tab_status.py`, add these helpers after `set_state_prefix` and before `add_title_prefix`:
 
 ```python
-_SUBTITLE_VARIABLE = "user.claudeStatus"
+_SUBTITLE_VARIABLE = "user.agentStatus"
 
 
 def _should_update_title(display_target: object | None = None) -> bool:
@@ -413,10 +413,10 @@ Add this section under Configuration after "Priority order":
 
 By default, status is shown as a tab title prefix.
 
-Set `"display_target": "subtitle"` to leave the main tab title alone and write status to the iTerm2 user variable `user.claudeStatus`. In iTerm2, open **Settings > Profiles > General** and set **Subtitle** to:
+Set `"display_target": "subtitle"` to leave the main tab title alone and write status to the iTerm2 user variable `user.agentStatus`. In iTerm2, open **Settings > Profiles > General** and set **Subtitle** to:
 
 ```text
-\(user.claudeStatus)
+\(user.agentStatus)
 ```
 
 Use `"display_target": "both"` to update both the title prefix and subtitle variable.

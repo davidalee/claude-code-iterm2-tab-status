@@ -17,6 +17,7 @@ Read the current config file at `~/.config/claude-tab-status/config.json` (creat
 | 9 | Badge text | `badge` | ⚠️ Needs input |
 | 10 | macOS notifications | `notify` | false |
 | 11 | Sound file path | `sound` | (empty) |
+| 12 | Display target | `display_target` | title |
 
 Display all settings with their current effective values in a numbered table. Then ask the user which setting(s) they want to change. After they respond, update only the specified values and write the full config to `~/.config/claude-tab-status/config.json`. The adapter will hot-reload the changes within ~1 second.
 
@@ -25,3 +26,4 @@ Validation rules:
 - `interval`: positive float
 - `badge_enabled`, `notify`: boolean
 - `sound`: valid file path or empty string
+- `display_target`: one of `title`, `subtitle`, or `both`

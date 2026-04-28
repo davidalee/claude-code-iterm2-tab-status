@@ -8,7 +8,7 @@ Add a configurable display target for Claude Code iTerm2 status updates. Existin
 
 The adapter currently applies status by changing the iTerm2 tab title through the Python API. That works for horizontal and vertical tabs, but vertical-tab users often want the main title to remain the command, job, or directory while Claude status appears on the subtitle line.
 
-iTerm2 supports user-defined variables in session context. A profile subtitle can reference a variable such as `\(user.claudeStatus)`, so the adapter can update the subtitle without taking over the tab title.
+iTerm2 supports user-defined variables in session context. A profile subtitle can reference a variable such as `\(user.agentStatus)`, so the adapter can update the subtitle without taking over the tab title.
 
 ## Goals
 
@@ -43,7 +43,7 @@ Add one config key:
 
 Invalid `display_target` values fall back to `title`.
 
-Subtitle mode always uses the fixed session-scoped iTerm2 user variable `user.claudeStatus`. Users reference it from iTerm2 as `\(user.claudeStatus)`. A fixed variable keeps the config surface small and avoids another setting for a rare name-collision case.
+Subtitle mode always uses the fixed session-scoped iTerm2 user variable `user.agentStatus`. Users reference it from iTerm2 as `\(user.agentStatus)`. A fixed variable keeps the config surface small and avoids another setting for a rare name-collision case.
 
 Environment variables:
 
@@ -59,7 +59,7 @@ When a signal enters a state, the adapter builds the status text from the config
 
 Title display continues to use the existing prefix plus the current title/session name.
 
-Subtitle display calls `session.async_set_variable("user.claudeStatus", status_text)` on the matched iTerm2 session. If this fails, the adapter logs at debug level and continues, matching the current best-effort behavior for title updates.
+Subtitle display calls `session.async_set_variable("user.agentStatus", status_text)` on the matched iTerm2 session. If this fails, the adapter logs at debug level and continues, matching the current best-effort behavior for title updates.
 
 When a Claude session is cleared, the adapter sets the same user variable to an empty string. This removes stale subtitle content while preserving the user's profile subtitle expression.
 
@@ -78,7 +78,7 @@ When a Claude session is cleared, the adapter sets the same user variable to an 
 
 - `README.md`
   - Document display target settings.
-  - Add iTerm2 setup instructions: Profiles > General > Subtitle = `\(user.claudeStatus)`.
+  - Add iTerm2 setup instructions: Profiles > General > Subtitle = `\(user.agentStatus)`.
   - Note that users who want Claude Code to stop changing main titles can set `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` in their shell startup file.
 
 - `commands/config.md`
@@ -101,7 +101,7 @@ uv run pytest -q
 Because iTerm2's Python runtime is mocked in unit tests, manual verification in iTerm2 remains useful for the subtitle expression. The expected manual setup is:
 
 1. Set plugin config `display_target` to `subtitle`.
-2. Set iTerm2 profile Subtitle to `\(user.claudeStatus)`.
+2. Set iTerm2 profile Subtitle to `\(user.agentStatus)`.
 3. Start a Claude Code session and submit a prompt.
 4. Confirm the main title remains controlled by iTerm2/Claude settings while the subtitle changes between running, idle, and attention states.
 
@@ -109,6 +109,6 @@ Because iTerm2's Python runtime is mocked in unit tests, manual verification in 
 
 The main compatibility risk is accidentally changing default title behavior. The default remains `title`, and tests should assert that missing config produces the existing behavior.
 
-The iTerm2 user-variable API requires fully qualified names beginning with `user.`. The adapter uses the fixed fully qualified name `user.claudeStatus`.
+The iTerm2 user-variable API requires fully qualified names beginning with `user.`. The adapter uses the fixed fully qualified name `user.agentStatus`.
 
 Claude Code can still set terminal titles independently. This feature does not suppress that; documentation will tell users how to opt out with `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1` if they want main titles fully controlled by iTerm2.

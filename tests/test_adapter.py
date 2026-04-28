@@ -413,6 +413,7 @@ class TestConfig:
         assert cfg["badge"] == "⚠️ Needs input"
         assert cfg["notify"] is False
         assert cfg["sound"] == ""
+        assert cfg["display_target"] == "title"
 
     def test_file_overrides_defaults(self, tmp_path: Path):
         """Config file values override defaults."""
@@ -450,6 +451,85 @@ class TestConfig:
         monkeypatch.setenv("CLAUDE_ITERM2_TAB_STATUS_BADGE_ENABLED", "false")
         cfg = claude_tab_status.load_config(str(tmp_path / "nonexistent.json"))
         assert cfg["badge_enabled"] is False
+
+    def test_display_target_accepts_subtitle(self, tmp_path: Path):
+        """display_target can route status to subtitle."""
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "subtitle"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "subtitle"
+
+    def test_display_target_invalid_falls_back_to_title(self, tmp_path: Path):
+        """Invalid display_target values preserve the title behavior."""
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "bad"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "title"
+
+    def test_display_target_is_case_insensitive(self, tmp_path: Path):
+        """display_target values are normalized case-insensitively."""
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "SUBTITLE"}))
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "subtitle"
+
+    def test_env_display_target_overrides_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Env var DISPLAY_TARGET overrides config file."""
+        cfg_file = tmp_path / "config.json"
+        cfg_file.write_text(json.dumps({"display_target": "title"}))
+        monkeypatch.setenv("CLAUDE_ITERM2_TAB_STATUS_DISPLAY_TARGET", "both")
+        cfg = claude_tab_status.load_config(str(cfg_file))
+        assert cfg["display_target"] == "both"
+
+
+# --- TestDisplayTargetHelpers ---
+
+
+class TestDisplayTargetHelpers:
+    def test_title_target_updates_only_title(self):
+        assert claude_tab_status._should_update_title("title") is True
+        assert claude_tab_status._should_update_subtitle("title") is False
+
+    def test_subtitle_target_updates_only_subtitle(self):
+        assert claude_tab_status._should_update_title("subtitle") is False
+        assert claude_tab_status._should_update_subtitle("subtitle") is True
+
+    def test_both_target_updates_both(self):
+        assert claude_tab_status._should_update_title("both") is True
+        assert claude_tab_status._should_update_subtitle("both") is True
+
+    def test_invalid_target_behaves_like_title(self):
+        assert claude_tab_status._should_update_title("bad-value") is True
+        assert claude_tab_status._should_update_subtitle("bad-value") is False
+
+    def test_subtitle_status_text_strips_padding(self):
+        assert claude_tab_status._subtitle_status_text("⚡ ") == "⚡"
+
+    async def test_set_subtitle_status_uses_shared_agent_variable(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock()
+
+        await claude_tab_status._set_subtitle_status(session, "⚡")
+
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "⚡")
+
+    async def test_clear_subtitle_status_sets_empty_string(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock()
+
+        await claude_tab_status._clear_subtitle_status(session)
+
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "")
+
+    async def test_set_subtitle_status_is_best_effort(self):
+        session = MagicMock()
+        session.async_set_variable = AsyncMock(side_effect=RuntimeError("boom"))
+
+        await claude_tab_status._set_subtitle_status(session, "⚡")
+
+        session.async_set_variable.assert_awaited_once_with("user.agentStatus", "⚡")
 
 
 # --- TestHotReload ---
